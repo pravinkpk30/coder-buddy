@@ -7,7 +7,7 @@ from langgraph.graph import StateGraph
 from langgraph.constants import END
 from langchain.globals import set_verbose, set_debug
 from agent.tools import write_file, read_file, get_current_directory, list_files
-from langchain.agents import create_react_agent
+from langchain.agents import create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 load_dotenv()
@@ -64,25 +64,19 @@ def coder_agent(state: dict) -> dict:
 
     coder_tools = [read_file, write_file, list_files, get_current_directory]
 
-    # Build a ReAct-compatible prompt and agent (must include {tools} and {tool_names})
-    system_with_tools = (
-        f"{system_prompt}\n\n"
-        "You have access to the following tools:\n{tools}\n\n"
-        "When deciding on tools, consider only these tool names: {tool_names}.\n"
-        "Use the tools judiciously to read and write files as needed."
-    )
-    # Note: Some LangChain versions format agent_scratchpad as a STRING, not a list of messages.
-    # To avoid type mismatches, inline the scratchpad into the human message.
+    # Build a Tool-Calling agent prompt (do NOT include {tools} or {tool_names};
+    # create_tool_calling_agent manages tool schemas automatically).
     react_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", system_with_tools),
-            ("human", "{input}\n\n{agent_scratchpad}"),
+            ("system", system_prompt),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
         ]
     )
 
-    react_agent = create_react_agent(llm, coder_tools, react_prompt)
+    react_agent = create_tool_calling_agent(llm, coder_tools, react_prompt)
 
-    # Provide both input and intermediate_steps; the agent will format the scratchpad string
+    # Provide the required intermediate_steps key for the agent scratchpad
     react_agent.invoke({"input": user_prompt, "intermediate_steps": []})
 
     coder_state.current_step_idx += 1
