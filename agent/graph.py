@@ -6,7 +6,7 @@ from agent.prompts import planner_prompt, architect_prompt, coder_system_prompt
 from langgraph.graph import StateGraph
 from langgraph.constants import END
 from langchain.globals import set_verbose, set_debug
-from agent.tools import write_file, read_file, get_current_directory, list_files
+from agent.tools import write_file, read_file, get_current_directory, list_files, init_project_root
 from langchain.agents import create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
@@ -15,6 +15,10 @@ load_dotenv()
 # enable debug and verbose and get clear output in the terminal
 set_debug(True)
 set_verbose(True)
+
+# Ensure the project root directory exists for file operations
+PROJECT_DIR = init_project_root()
+print(f"[coder-buddy] Project root initialized at: {PROJECT_DIR}")
 
 llm = ChatGroq(model="openai/gpt-oss-120b", api_key=os.getenv("GROQ_API_KEY"))
 
@@ -78,6 +82,17 @@ def coder_agent(state: dict) -> dict:
 
     # Provide the required intermediate_steps key for the agent scratchpad
     react_agent.invoke({"input": user_prompt, "intermediate_steps": []})
+
+    # After each coder step, print a brief snapshot of files in the project root
+    try:
+        proj_dir = get_current_directory.run()
+        files_snapshot = list_files.run(".")
+        print("\n[coder-buddy] Current project directory:", proj_dir)
+        print("[coder-buddy] Files after step",
+              coder_state.current_step_idx, ":\n",
+              files_snapshot if files_snapshot else "(no files yet)")
+    except Exception as e:
+        print(f"[coder-buddy] Warning: could not list files ({e})")
 
     coder_state.current_step_idx += 1
     return {"coder_state": coder_state}
